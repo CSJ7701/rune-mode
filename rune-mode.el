@@ -82,7 +82,7 @@
        (t indent)))))
 
 (defun rune-indent-line ()
-  "Indent current line for Rune mode."
+  "Indent current line for Rune mode. Indents from ':' to 'end' and from '[' to ']'."
   (interactive)
   (let ((indent (rune-calculate-indentation))
         (offset (- (current-column) (current-indentation))))
