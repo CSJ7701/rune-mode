@@ -1,12 +1,13 @@
 ;;; rune-mode.el --- Major mode for Rune configuration files -*- lexical-binding: t; -*-
 
 ;; Author: CJ
+;; Version: 0.3
 ;; Keywords: languages, configuration
-;; Version: 0.2
 
 ;;; Commentary:
-;; Major mode for Rune configuration syntax.
-;; Provides syntax highlighting and indentation support.
+;; Major mode for Rune configuration files.
+;; Features syntax highlighting, comment syntax, and indentation for
+;; nested blocks and arrays.
 
 ;;; Code:
 
@@ -14,16 +15,35 @@
   "Indentation offset for `rune-mode'.")
 
 (defvar rune-mode-font-lock-keywords
-  `((,@(rx line-start "@" (group (+ (any "a-zA-Z_"))) symbol-end)
-     1 font-lock-preprocessor-face)
+  `(
+    ;; @directives like @author "..."
+    (,(rx line-start
+          (group "@" (+ (any "a-zA-Z_")))
+          (+ space)
+          (group "\"" (0+ (not (any "\""))) "\""))
+     (1 font-lock-preprocessor-face)
+     (2 font-lock-string-face))
+
+    ;; section headers: foo:
     (,(rx line-start (group (+ (any "a-zA-Z0-9_-"))) ":")
      1 font-lock-keyword-face)
+
+    ;; block terminator
     (,(rx symbol-start "end" symbol-end)
      0 font-lock-keyword-face)
+
+    ;; numeric constants
     (,(rx symbol-start (group (1+ digit)) symbol-end)
      1 font-lock-constant-face)
+
+    ;; regex literal (r"...")
+    (,(rx symbol-start "r" "\"" (0+ (not (any "\""))) "\"")
+     0 font-lock-string-face)
+
+    ;; strings
     (,(rx "\"" (0+ (not (any "\""))) "\"")
-     0 font-lock-string-face)))
+     0 font-lock-string-face)
+    ))
 
 (defvar rune-mode-syntax-table
   (let ((table (make-syntax-table)))
@@ -33,29 +53,33 @@
     table)
   "Syntax table for `rune-mode'.")
 
+(defun rune--previous-indentation-level ()
+  "Return indentation level of previous non-empty line."
+  (save-excursion
+    (forward-line -1)
+    (while (and (not (bobp))
+                (looking-at-p "^[ \t]*$"))
+      (forward-line -1))
+    (current-indentation)))
+
 (defun rune-calculate-indentation ()
-  "Compute indentation for the current line in Rune mode."
+  "Compute indentation for current line."
   (save-excursion
     (beginning-of-line)
-    (let ((indent 0))
-      ;; If current line is 'end', dedent
-      (when (looking-at (rx (* space) "end" symbol-end))
-        (setq indent (- indent rune-mode-indent-offset)))
-      ;; Look upward for previous non-empty line
-      (while (and (not (bobp))
-                  (progn (forward-line -1)
-                         (looking-at-p "^[ \t]*$"))))
-      (when (not (bobp))
-        (cond
-         ;; Previous line ends with ':'
-         ((looking-at (rx (* space) (+ (not (any "#"))) ":" (* space) (opt "#" (* any))))
-          (setq indent (+ indent rune-mode-indent-offset)))
-         ;; Previous line is 'end' (don’t increase indent)
-         ((looking-at (rx (* space) "end" symbol-end))
-          (setq indent 0))
-         ;; Otherwise, use same indentation
-         (t (setq indent (current-indentation)))))
-      (max 0 indent))))
+    (let ((indent (rune--previous-indentation-level)))
+      (cond
+       ;; Dedent for 'end' or closing ']'
+       ((looking-at (rx (* space) (or "end" "]") symbol-end))
+        (max 0 (- indent rune-mode-indent-offset)))
+
+       ;; If previous line ends with ':' or '[', indent
+       ((save-excursion
+          (forward-line -1)
+          (looking-at (rx (* space) (+ (not (any "#"))) (or ":" "["))))
+        (+ indent rune-mode-indent-offset))
+
+       ;; Otherwise keep same indentation
+       (t indent)))))
 
 (defun rune-indent-line ()
   "Indent current line for Rune mode."
