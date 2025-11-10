@@ -16,32 +16,26 @@
 
 (defvar rune-mode-font-lock-keywords
   `(
-    ;; @directives like @author "..."
-    (,(rx line-start
-	  (* space)
-          (group "@" (+ (any "a-zA-Z_")))
-	  symbol-end)
-     1 font-lock-doc-face)
-    
+    ;; @directives - highlight the @ keyword itself
+    (,(rx bol
+          (* space)
+          (group "@" (+ (any "a-zA-Z_"))))
+     (1 font-lock-preprocessor-face))
     ;; section headers: foo:
-    (,(rx line-start (group (+ (any "a-zA-Z0-9_-"))) ":")
-     1 font-lock-keyword-face)
-
+    (,(rx bol (* space) (group (+ (any "a-zA-Z0-9_-"))) ":")
+     (1 font-lock-keyword-face))
     ;; block terminator
     (,(rx symbol-start "end" symbol-end)
-     0 font-lock-keyword-face)
-
+     (0 font-lock-keyword-face))
     ;; numeric constants
     (,(rx symbol-start (group (1+ digit)) symbol-end)
-     1 font-lock-constant-face)
-
+     (1 font-lock-constant-face))
     ;; regex literal (r"...")
     (,(rx symbol-start "r" "\"" (0+ (not (any "\""))) "\"")
-     0 font-lock-string-face)
-
+     (0 font-lock-string-face))
     ;; strings
     (,(rx "\"" (0+ (not (any "\""))) "\"")
-     0 font-lock-string-face)
+     (0 font-lock-string-face))
     ))
 
 (defvar rune-mode-syntax-table
