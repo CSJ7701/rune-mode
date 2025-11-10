@@ -1,7 +1,7 @@
 ;;; rune-mode.el --- Major mode for Rune configuration files -*- lexical-binding: t; -*-
 
-;; Author: CJ
-;; Version: 0.3
+;; Author: Christian Johnson
+;; Version: 0.4
 ;; Keywords: languages, configuration
 
 ;;; Commentary:
@@ -18,12 +18,11 @@
   `(
     ;; @directives like @author "..."
     (,(rx line-start
+	  (* space)
           (group "@" (+ (any "a-zA-Z_")))
-          (+ space)
-          (group "\"" (0+ (not (any "\""))) "\""))
-     (1 font-lock-preprocessor-face)
-     (2 font-lock-string-face))
-
+	  symbol-end)
+     1 font-lock-doc-face)
+    
     ;; section headers: foo:
     (,(rx line-start (group (+ (any "a-zA-Z0-9_-"))) ":")
      1 font-lock-keyword-face)
@@ -58,9 +57,27 @@
   (save-excursion
     (forward-line -1)
     (while (and (not (bobp))
-                (looking-at-p "^[ \t]*$"))
+                (or (looking-at-p "^[ \t]*$")
+		    (looking-at-p "^[ \t]*#")))
       (forward-line -1))
     (current-indentation)))
+
+(defun rune--previous-line-opens-block-p ()
+  "Return non-nil if previous non-empty line opens a block (ends with : or [)."
+  (save-excursion
+    (forward-line -1)
+    ;; Skip blank lines and comments
+    (while (and (not (bobp))
+		(or (looking-at-p "^[ \t]*$")
+		    (looking-at-p "^[ \t]*#")))
+      (forward-line -1))
+    ;; Check if line ends with : or [ (ignoring trailing whitespace/comments
+    (end-of-line)
+    (skip-chars-backward " \t")
+    (when (search-backward "#" (line-beginning-position) t)
+      (skip-chars-backward " \t"))
+    (or (eq (char-before) ?:)
+	(eq (char-before) ?\[))))
 
 (defun rune-calculate-indentation ()
   "Compute indentation for current line."
@@ -69,13 +86,11 @@
     (let ((indent (rune--previous-indentation-level)))
       (cond
        ;; Dedent for 'end' or closing ']'
-       ((looking-at (rx (* space) (or "end" "]") symbol-end))
+       ((looking-at (rx (* space) (or (seq "end" symbol-end) "]")))
         (max 0 (- indent rune-mode-indent-offset)))
 
        ;; If previous line ends with ':' or '[', indent
-       ((save-excursion
-          (forward-line -1)
-          (looking-at (rx (* space) (+ (not (any "#"))) (or ":" "["))))
+       ((rune--previous-line-opens-block-p)
         (+ indent rune-mode-indent-offset))
 
        ;; Otherwise keep same indentation
